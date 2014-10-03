@@ -19,8 +19,29 @@ def rectify_pair(image_left, image_right, viz=False):
       H_left, H_right: homographies that warp the left and right image so
         their epipolar lines are corresponding rows.
     """
-    pass
 
+    sift = cv2.SIFT()
+
+    kpA, descriptorsA = sift.detectAndCompute(image_left, None)
+    kpB, descriptorsB = sift.detectAndCompute(image_right, None)
+
+    matcher = cv2.BFMatcher()
+    matches = matcher.knnMatch(descriptorsA, descriptorsB, k=2)
+
+    good = []
+
+    for m, n in matches:
+        if m.distance < 0.7 * n.distance:
+            good.append(m)
+
+    srcP = numpy.float32([kpA[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    dstP = numpy.float32([kpB[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+    height, width, _ = image_left.shape;
+
+    fundamental, mask = cv2.findFundamentalMat(srcP, dstP, method = cv2.cv.CV_FM_RANSAC, param1 = 1.0, param2 = 0.99)
+    _, H_left, H_right = cv2.stereoRectifyUncalibrated(srcP, dstP, fundamental, (height, width), threshold = 5.0)
+
+    return fundamental, H_left, H_right
 
 def disparity_map(image_left, image_right):
     """Compute the disparity images for image_left and image_right.
