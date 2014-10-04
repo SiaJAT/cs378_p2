@@ -36,12 +36,16 @@ def rectify_pair(image_left, image_right, viz=False):
 
     srcP = numpy.float32([kpA[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
     dstP = numpy.float32([kpB[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
-    height, width, _ = image_left.shape;
+    height, width, _ = image_left.shape
 
-    fundamental, mask = cv2.findFundamentalMat(srcP, dstP, method = cv2.cv.CV_FM_RANSAC, param1 = 1.0, param2 = 0.99)
-    _, H_left, H_right = cv2.stereoRectifyUncalibrated(srcP, dstP, fundamental, (height, width), threshold = 10.0)
+    fundamental, mask = cv2.findFundamentalMat(srcP, dstP,
+        method=cv2.cv.CV_FM_RANSAC, param1=1.0, param2=0.99)
+
+    _, H_left, H_right = cv2.stereoRectifyUncalibrated(srcP, dstP,
+        fundamental, (height, width), threshold=10.0)
 
     return fundamental, H_left, H_right
+
 
 def disparity_map(image_left, image_right):
     """Compute the disparity images for image_left and image_right.
@@ -56,21 +60,21 @@ def disparity_map(image_left, image_right):
 
     window_size = 3
     min_disp = 64
-    num_disp = 112-min_disp
-    stereo = cv2.StereoSGBM(minDisparity = min_disp,
-        numDisparities = num_disp,
-        SADWindowSize = window_size,
-        uniquenessRatio = 10,
-        speckleWindowSize = 100,
-        speckleRange = 32,
-        disp12MaxDiff = 1,
-        P1 = 8*3*window_size**2,
-        P2 = 32*3*window_size**2,
-        fullDP = False
+    num_disp = 112 - min_disp
+    stereo = cv2.StereoSGBM(minDisparity=min_disp,
+        numDisparities=num_disp,
+        SADWindowSize=window_size,
+        uniquenessRatio=10,
+        speckleWindowSize=100,
+        speckleRange=32,
+        disp12MaxDiff=1,
+        P1=8 * 3 * window_size ** 2,
+        P2=32 * 3 * window_size ** 2,
+        fullDP=False
     )
 
     disp = stereo.compute(image_left, image_right)
-    disp = (disp-min_disp)/num_disp
+    disp = (disp - min_disp) / num_disp
     print "num channels"
     print len(disp.shape)
 
@@ -79,6 +83,7 @@ def disparity_map(image_left, image_right):
     # cv2.destroyAllWindows()
 
     return disp.astype(numpy.uint8)
+
 
 def point_cloud(disparity_image, image_left, focal_length):
     """Create a point cloud from a disparity image and a focal length.
