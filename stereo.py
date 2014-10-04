@@ -55,7 +55,7 @@ def disparity_map(image_left, image_right):
     """
 
     window_size = 3
-    min_disp = 16
+    min_disp = 64
     num_disp = 112-min_disp
     stereo = cv2.StereoSGBM(minDisparity = min_disp,
         numDisparities = num_disp,
