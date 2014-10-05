@@ -81,8 +81,8 @@ class TestStereo(unittest.TestCase):
         disparity = stereo.disparity_map(left, right)
 
         # Compute the difference between the two. Useful to visualize this!
-        print (disparity_expected)
-        print (disparity)
+        # print (disparity_expected)
+        # print (disparity)
         disparity_diff = cv2.absdiff(disparity, disparity_expected)
 
         # The median difference between the expected and actual disparity
@@ -91,18 +91,18 @@ class TestStereo(unittest.TestCase):
         median_diff = sorted(differences)[len(differences) / 2]
         self.assertLessEqual(median_diff, 5)
 
-    # def test_point_cloud(self):
-    #     disparity = cv2.imread('test_data/tsukuba/disparity_left.png',
-    #                            cv2.CV_LOAD_IMAGE_GRAYSCALE)
-    #     colors = cv2.imread('test_data/tsukuba/left.png')
-    #     focal_length = 10
+    def test_point_cloud(self):
+        disparity = cv2.imread('test_data/tsukuba/disparity_left.png',
+                               cv2.CV_LOAD_IMAGE_GRAYSCALE)
+        colors = cv2.imread('test_data/tsukuba/left.png')
+        focal_length = 10
 
-    #     ply_string = stereo.point_cloud(disparity, colors, focal_length)
-    #     # View me in Meshlab!
-    #     with open("tsukuba.ply", 'w') as f:
-    #         f.write(ply_string)
-    #     # Trivial test. We'll also inspect the cloud visually.
-    #     self.assertGreater(len(ply_string), 0)
+        ply_string = stereo.point_cloud(disparity, colors, focal_length)
+        # View me in Meshlab!
+        with open("tsukuba.ply", 'w') as f:
+            f.write(ply_string)
+        # Trivial test. We'll also inspect the cloud visually.
+        self.assertGreater(len(ply_string), 0)
 
 if __name__ == '__main__':
     unittest.main()

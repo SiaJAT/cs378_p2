@@ -44,6 +44,8 @@ def rectify_pair(image_left, image_right, viz=False):
     _, H_left, H_right = cv2.stereoRectifyUncalibrated(srcP, dstP,
         fundamental, (height, width), threshold=10.0)
 
+    print H_left
+
     return fundamental, H_left, H_right
 
 
@@ -75,11 +77,11 @@ def disparity_map(image_left, image_right):
 
     disp = stereo.compute(image_left, image_right)
     disp = (disp - min_disp) / num_disp
-    print "num channels"
-    print len(disp.shape)
+    # print "num channels"
+    # print len(disp.shape)
 
     # cv2.imshow('disparity', (disp-min_disp)/num_disp)
-    # cv2.waitKey()
+    # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
     return disp.astype(numpy.uint8)
@@ -98,4 +100,89 @@ def point_cloud(disparity_image, image_left, focal_length):
         pixels, with colors sampled from left_image. You may filter low-
         disparity pixels or noise pixels if you choose.
     """
-    pass
+    height, width, _ = image_left.shape
+
+    Q = numpy.float32([[1, 0, 0, (width / 2)],
+                       [0, -1, 0, (height / 2)],
+                       [0, 0, focal_length, 0],
+                       [0, 0, 0, 1]])
+
+    points = cv2.reprojectImageTo3D(disparity_image, Q)
+    colors = cv2.cvtColor(image_left, cv2.COLOR_BGR2RGB)
+
+    mask = disparity_image > disparity_image.min()
+    out_points = points[mask]
+    out_colors = colors[mask]
+    verts = numpy.hstack([out_points, out_colors])
+    print verts
+
+    output = '''ply
+format ascii 1.0
+element vertex %d
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+end_header\n''' % len(verts)
+
+    for row in verts:
+        output += '%f %f %f %d %d %d\n' % (row[0], row[1]+500, row[2], row[3], row[4], row[5])
+
+    return output
+
+def warp_image(image, homography):
+    """Warps 'image' by 'homography'
+
+    Arguments:
+      image: a 3-channel image to be warped.
+      homography: a 3x3 perspective projection matrix mapping points
+                  in the frame of 'image' to a target frame.
+
+    Returns:
+      - a new 4-channel image containing the warped input, resized to contain
+        the new image's bounds. Translation is offset so the image fits exactly
+        within the bounds of the image. The fourth channel is an alpha channel
+        which is zero anywhere that the warped input image does not map in the
+        output, i.e. empty pixels.
+      - an (x, y) tuple containing location of the warped image's upper-left
+        corner in the target space of 'homography', which accounts for any
+        offset translation component of the homography.
+    """
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
+    height, width, depth = img.shape
+    warp = cv2.warpPerspective(img, homography,
+                               (width,height))
+    return warp
+
+
+
+if __name__ == '__main__':
+    # Read initial images
+    img_right = cv2.imread("test_data/right_3.jpg")
+    img_left = cv2.imread("test_data/left_3.jpg")
+
+    F, H_left, H_right = rectify_pair(img_left, img_right)
+
+    rectified_left = warp_image(img_left, H_left)
+    cv2.imwrite("test_data/rect_left.jpg", rectified_left)
+
+    rectified_right = warp_image(img_right, H_right)
+    cv2.imwrite("test_data/rect_right.jpg",rectified_right)
+
+    disparity = disparity_map(rectified_left, rectified_right)
+    cv2.imwrite("test_data/disp.jpg", disparity)
+    disparity_image = cv2.imread('test_data/disparity.png',
+                               cv2.CV_LOAD_IMAGE_GRAYSCALE)
+
+    colors = cv2.imread('test_data/left_3.jpg')
+    focal_length = 10
+
+    ply_string = point_cloud(disparity, colors, focal_length)
+    # View me in Meshlab!
+    with open("tsukuba.ply", 'w') as f:
+        f.write(ply_string)
+
+    print "done"
+
