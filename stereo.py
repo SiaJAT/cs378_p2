@@ -75,8 +75,8 @@ def disparity_map(image_left, image_right):
 
     disp = stereo.compute(image_left, image_right)
     disp = (disp - min_disp) / num_disp
-    print "num channels"
-    print len(disp.shape)
+    # print "num channels"
+    # print len(disp.shape)
 
     # cv2.imshow('disparity', (disp-min_disp)/num_disp)
     # cv2.waitKey()
@@ -98,4 +98,34 @@ def point_cloud(disparity_image, image_left, focal_length):
         pixels, with colors sampled from left_image. You may filter low-
         disparity pixels or noise pixels if you choose.
     """
-    pass
+    height, width, _ = image_left.shape
+
+    Q = numpy.float32([[1, 0, 0, width / 2],
+                    [0, 1, 0, height / 2],
+                    [0, 0, focal_length, 0],
+                    [0, 0, 0, 1]])
+
+    points = cv2.reprojectImageTo3D(disparity_image, Q)
+    colors = cv2.cvtColor(image_left, cv2.COLOR_BGR2RGB)
+
+    mask = disparity_image > disparity_image.min()
+    out_points = points[mask]
+    out_colors = colors[mask]
+    verts = numpy.hstack([out_points, out_colors])
+    print verts
+
+    output = '''ply
+format ascii 1.0
+element vertex %d
+property float x
+property float y
+property float z
+property uchar red
+property uchar green
+property uchar blue
+end_header\n''' % len(verts)
+
+    for row in verts:
+        output += '%f %f %f %d %d %d\n' % (row[0], row[1], row[2], row[3], row[4], row[5])
+
+    return output
