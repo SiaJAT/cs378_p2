@@ -185,4 +185,3 @@ if __name__ == '__main__':
         f.write(ply_string)
 
     print "done"
-
