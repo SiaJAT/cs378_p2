@@ -22,11 +22,11 @@ def rectify_pair(image_left, image_right, viz=False):
 
     sift = cv2.SIFT()
 
-    kpA, descriptorsA = sift.detectAndCompute(image_left, None)
-    kpB, descriptorsB = sift.detectAndCompute(image_right, None)
+    kp_left, descriptors_left = sift.detectAndCompute(image_left, None)
+    kp_right, descriptors_right = sift.detectAndCompute(image_right, None)
 
     matcher = cv2.BFMatcher()
-    matches = matcher.knnMatch(descriptorsA, descriptorsB, k=2)
+    matches = matcher.knnMatch(descriptors_left, descriptors_right, k=2)
 
     good = []
 
@@ -34,17 +34,17 @@ def rectify_pair(image_left, image_right, viz=False):
         if m.distance < 0.73 * n.distance:
             good.append(m)
 
-    srcP = numpy.float32([kpA[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-    dstP = numpy.float32([kpB[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+    srcP = numpy.float32([kp_left[m.queryIdx].pt
+                         for m in good]).reshape(-1, 1, 2)
+    dstP = numpy.float32([kp_right[m.trainIdx].pt
+                         for m in good]).reshape(-1, 1, 2)
     height, width, _ = image_left.shape
 
-    fundamental, mask = cv2.findFundamentalMat(srcP, dstP,
-        method=cv2.cv.CV_FM_RANSAC, param1=1.0, param2=0.99)
+    fundamental, mask = cv2.findFundamentalMat(
+        srcP, dstP, method=cv2.cv.CV_FM_RANSAC, param1=1.0, param2=0.99)
 
-    _, H_left, H_right = cv2.stereoRectifyUncalibrated(srcP, dstP,
-        fundamental, (height, width), threshold=10.0)
-
-    print H_left
+    _, H_left, H_right = cv2.stereoRectifyUncalibrated(
+        srcP, dstP, fundamental, (height, width), threshold=5.0)
 
     return fundamental, H_left, H_right
 
@@ -63,26 +63,21 @@ def disparity_map(image_left, image_right):
     window_size = 3
     min_disp = 64
     num_disp = 112 - min_disp
+
+    # set of parameters that pass the unit test
     stereo = cv2.StereoSGBM(minDisparity=min_disp,
-        numDisparities=num_disp,
-        SADWindowSize=window_size,
-        uniquenessRatio=10,
-        speckleWindowSize=100,
-        speckleRange=32,
-        disp12MaxDiff=1,
-        P1=8 * 3 * window_size ** 2,
-        P2=32 * 3 * window_size ** 2,
-        fullDP=False
-    )
+                            numDisparities=num_disp,
+                            SADWindowSize=window_size,
+                            uniquenessRatio=10,
+                            speckleWindowSize=100,
+                            speckleRange=32,
+                            disp12MaxDiff=1,
+                            P1=8 * 3 * window_size ** 2,
+                            P2=32 * 3 * window_size ** 2,
+                            fullDP=False)
 
     disp = stereo.compute(image_left, image_right)
     disp = (disp - min_disp) / num_disp
-    # print "num channels"
-    # print len(disp.shape)
-
-    # cv2.imshow('disparity', (disp-min_disp)/num_disp)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
 
     return disp.astype(numpy.uint8)
 
@@ -102,6 +97,7 @@ def point_cloud(disparity_image, image_left, focal_length):
     """
     height, width, _ = image_left.shape
 
+    # corrected the Q matrix to properly reproject image
     Q = numpy.float32([[1, 0, 0, (width / 2)],
                        [0, -1, 0, (height / 2)],
                        [0, 0, focal_length, 0],
@@ -114,24 +110,28 @@ def point_cloud(disparity_image, image_left, focal_length):
     out_points = points[mask]
     out_colors = colors[mask]
     verts = numpy.hstack([out_points, out_colors])
-    print verts
 
-    output = '''ply
-format ascii 1.0
-element vertex %d
-property float x
-property float y
-property float z
-property uchar red
-property uchar green
-property uchar blue
-end_header\n''' % len(verts)
+    output = """ply
+             format ascii 1.0
+             element vertex %d
+             property float x
+             property float y
+             property float z
+             property uchar red
+             property uchar green
+             property uchar blue
+             end_header\n""" % len(verts)
 
+    # To center image point cloud in meshlab
+    vert_offset = 500
     for row in verts:
-        output += '%f %f %f %d %d %d\n' % (row[0], row[1]+500, row[2], row[3], row[4], row[5])
+        output += '%f %f %f %d %d %d\n' % \
+            (row[0], row[1]+vert_offset, row[2], row[3], row[4], row[5])
 
     return output
 
+
+# Used warp_image function from project 1 to produce rectified images
 def warp_image(image, homography):
     """Warps 'image' by 'homography'
 
@@ -153,35 +153,5 @@ def warp_image(image, homography):
     img = cv2.cvtColor(image, cv2.COLOR_BGR2BGRA)
     height, width, depth = img.shape
     warp = cv2.warpPerspective(img, homography,
-                               (width,height))
+                               (width, height))
     return warp
-
-
-
-if __name__ == '__main__':
-    # Read initial images
-    img_right = cv2.imread("test_data/right_3.jpg")
-    img_left = cv2.imread("test_data/left_3.jpg")
-
-    F, H_left, H_right = rectify_pair(img_left, img_right)
-
-    rectified_left = warp_image(img_left, H_left)
-    cv2.imwrite("test_data/rect_left.jpg", rectified_left)
-
-    rectified_right = warp_image(img_right, H_right)
-    cv2.imwrite("test_data/rect_right.jpg",rectified_right)
-
-    disparity = disparity_map(rectified_left, rectified_right)
-    cv2.imwrite("test_data/disp.jpg", disparity)
-    disparity_image = cv2.imread('test_data/disparity.png',
-                               cv2.CV_LOAD_IMAGE_GRAYSCALE)
-
-    colors = cv2.imread('test_data/left_3.jpg')
-    focal_length = 10
-
-    ply_string = point_cloud(disparity, colors, focal_length)
-    # View me in Meshlab!
-    with open("tsukuba.ply", 'w') as f:
-        f.write(ply_string)
-
-    print "done"
