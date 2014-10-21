@@ -22,29 +22,36 @@ def rectify_pair(image_left, image_right, viz=False):
 
     sift = cv2.SIFT()
 
-    kp_left, descriptors_left = sift.detectAndCompute(image_left, None)
-    kp_right, descriptors_right = sift.detectAndCompute(image_right, None)
+    # find the keypoints and descriptors for left and right images
+    keypoints_left, descript_left = sift.detectAndCompute(image_left, None)
+    keypoints_right, descript_right = sift.detectAndCompute(image_right, None)
 
+    # match the matches with knn
     matcher = cv2.BFMatcher()
-    matches = matcher.knnMatch(descriptors_left, descriptors_right, k=2)
+    matches = matcher.knnMatch(descript_left, descript_right, k=2)
 
-    good = []
+    # use lowes ratio to filter out matches
+    good = [m for m, n in matches if m.distance < (0.73 * n.distance)]
 
-    for m, n in matches:
-        if m.distance < 0.73 * n.distance:
-            good.append(m)
-
-    srcP = numpy.float32([kp_left[m.queryIdx].pt
-                         for m in good]).reshape(-1, 1, 2)
-    dstP = numpy.float32([kp_right[m.trainIdx].pt
-                         for m in good]).reshape(-1, 1, 2)
+    # get source and destination points
+    src_points = numpy.float32([keypoints_left[m.queryIdx].pt
+                               for m in good]).reshape(-1, 1, 2)
+    dst_points = numpy.float32([keypoints_right[m.trainIdx].pt
+                               for m in good]).reshape(-1, 1, 2)
     height, width, _ = image_left.shape
 
-    fundamental, mask = cv2.findFundamentalMat(
-        srcP, dstP, method=cv2.cv.CV_FM_RANSAC, param1=1.0, param2=0.99)
+    # find fundamental matrix
+    fundamental, mask = cv2.findFundamentalMat(src_points,
+                                               dst_points,
+                                               method=cv2.cv.CV_FM_RANSAC,
+                                               param1=1.0, param2=0.99)
 
-    _, H_left, H_right = cv2.stereoRectifyUncalibrated(
-        srcP, dstP, fundamental, (height, width), threshold=5.0)
+    # rectify image using fundamental matrix, source/destination points
+    _, H_left, H_right = cv2.stereoRectifyUncalibrated(src_points,
+                                                       dst_points,
+                                                       fundamental,
+                                                       (height, width),
+                                                       threshold=5.0)
 
     return fundamental, H_left, H_right
 
@@ -76,6 +83,7 @@ def disparity_map(image_left, image_right):
                             P2=32 * 3 * window_size ** 2,
                             fullDP=False)
 
+    # scale disparity image by min_diparity and num_disparity
     disp = stereo.compute(image_left, image_right)
     disp = (disp - min_disp) / num_disp
 
@@ -132,6 +140,7 @@ def point_cloud(disparity_image, image_left, focal_length):
 
 
 # Used warp_image function from project 1 to produce rectified images
+# Used in test script(results.py) to reticfy image
 def warp_image(image, homography):
     """Warps 'image' by 'homography'
 
